@@ -1,0 +1,32 @@
+diff --git a/Code/Sandbox/Plugins/EditorCommon/NodeGraph/PinWidget.cpp b/Code/Sandbox/Plugins/EditorCommon/NodeGraph/PinWidget.cpp
+index 72622a38..f9996eb0 100644
+--- a/Code/Sandbox/Plugins/EditorCommon/NodeGraph/PinWidget.cpp
++++ b/Code/Sandbox/Plugins/EditorCommon/NodeGraph/PinWidget.cpp
+@@ -4,6 +4,7 @@
+ #include "PinWidget.h"
+ 
+ #include "NodePinWidgetStyle.h"
++#include "TextWidgetStyle.h"
+ #include "NodeGraphView.h"
+ #include "NodeGraphViewStyle.h"
+ #include "GraphicsSceneIcon.h"
+@@ -108,7 +109,9 @@ CPinWidget::CPinWidget(CAbstractPinItem& item, CNodeWidget& nodeWidget, CNodeGra
+ 	{
+ 		CPinName* pName = new CPinName(m_item.GetName());
+ 		pName->setFont(m_pStyle->GetTextFont());
+-		pName->setStyleSheet(QString("QLabel { font: bold; color: rgb(94, 94, 94); background: rgba(0, 0, 0, 0) }"));
++		const QColor pinTextColor = m_pStyle->GetHeaderTextStyle().GetTextColor();
++		pName->setStyleSheet(QString("QLabel { font: bold; color: rgb(%1, %2, %3); background: rgba(0, 0, 0, 0) }")
++		                     .arg(pinTextColor.red()).arg(pinTextColor.green()).arg(pinTextColor.blue()));
+ 		pName->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
+ 
+ 		if (item.IsInputPin())
+@@ -260,7 +263,7 @@ void CPinWidget::paint(QPainter* pPainter, const QStyleOptionGraphicsItem* pOpti
+ 
+ 		if (!IsSelected())
+ 		{
+-			pPainter->setPen(QColor(94, 94, 94));
++			pPainter->setPen(m_pStyle->GetHeaderTextStyle().GetTextColor());
+ 			pPainter->drawText(textGeom, alignment, m_pName->text());
+ 
+ 			if (IsHighlighted())

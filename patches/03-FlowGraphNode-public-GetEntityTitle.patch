@@ -1,0 +1,20 @@
+diff --git a/Code/Sandbox/EditorQt/HyperGraph/FlowGraphNode.h b/Code/Sandbox/EditorQt/HyperGraph/FlowGraphNode.h
+index e8405ab6..684d68ef 100644
+--- a/Code/Sandbox/EditorQt/HyperGraph/FlowGraphNode.h
++++ b/Code/Sandbox/EditorQt/HyperGraph/FlowGraphNode.h
+@@ -74,10 +74,14 @@ public:
+ 
+ 	virtual CString      GetTitle() const;
+ 
++	// The label shown on the target-entity port ("Choose Entity", the entity
++	// name, "<Graph Entity>", ...). Public so the Qt FlowGraph adapter can show
++	// it exactly like the legacy painter does.
++	virtual CString      GetEntityTitle() const;
++
+ 	virtual IUndoObject* CreateUndo();
+ protected:
+ 	virtual bool         IsEntityValid() const;
+-	virtual CString      GetEntityTitle() const;
+ 
+ protected:
+ 	CryGUID                       m_entityGuid;

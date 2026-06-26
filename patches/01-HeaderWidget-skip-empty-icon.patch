@@ -1,0 +1,31 @@
+diff --git a/Code/Sandbox/Plugins/EditorCommon/NodeGraph/HeaderWidget.cpp b/Code/Sandbox/Plugins/EditorCommon/NodeGraph/HeaderWidget.cpp
+index b2522a70..1e124ccc 100644
+--- a/Code/Sandbox/Plugins/EditorCommon/NodeGraph/HeaderWidget.cpp
++++ b/Code/Sandbox/Plugins/EditorCommon/NodeGraph/HeaderWidget.cpp
+@@ -50,7 +50,7 @@ CHeaderWidget::CHeaderWidget(CNodeGraphViewGraphicsWidget& viewWidget, bool show
+ 	setMinimumHeight(height);
+ 	setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+ 
+-	CAbstractNodeGraphViewModelItem* pItem = viewWidget.GetAbstractItem(); 
++	CAbstractNodeGraphViewModelItem* pItem = viewWidget.GetAbstractItem();
+ 	if (CAbstractNodeItem* pNodeItem = pItem->Cast<CAbstractNodeItem>())
+ 	{
+ 		pNodeItem->SignalNameChanged.Connect(this, &CHeaderWidget::OnNameChanged);
+@@ -64,7 +64,7 @@ CHeaderWidget::CHeaderWidget(CNodeGraphViewGraphicsWidget& viewWidget, bool show
+ 
+ 	m_name.setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+ 	m_name.setMaximumHeight(height - 2);
+-	
++
+ 	const QMargins hm = m_pStyle->GetMargins();
+ 	m_pLayout = new QGraphicsLinearLayout();
+ 	m_pLayout->setOrientation(Qt::Horizontal);
+@@ -75,7 +75,7 @@ CHeaderWidget::CHeaderWidget(CNodeGraphViewGraphicsWidget& viewWidget, bool show
+ 	m_pLayout->setAlignment(&m_name, Qt::AlignLeft);
+ 	m_pLayout->addStretch(hm.left());
+ 
+-	if (showTypeIcon)
++	if (showTypeIcon && !m_pStyle->GetNodeIcon().isNull())
+ 	{
+ 		CHeaderTypeIcon* pHeaderIcon = new CHeaderTypeIcon(viewWidget);
+ 		AddIcon(pHeaderIcon, EIconSlot::Left);

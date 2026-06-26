@@ -3,13 +3,13 @@
 #include "StdAfx.h"
 #include "FlowGraphQtViewModel.h"
 
-#include "IEditorImpl.h"                  // GetIEditorImpl
+#include "IEditorImpl.h"
 #include "HyperGraph/HyperGraph.h"
 #include "HyperGraph/HyperGraphNode.h"
-#include "HyperGraph/FlowGraphNode.h"     // CFlowNode::GetEntityTitle
-#include "HyperGraph/FlowGraphManager.h"  // GetPrototypesEx (node dictionary)
+#include "HyperGraph/FlowGraphNode.h"
+#include "HyperGraph/FlowGraphManager.h"
 
-#include "FlowGraphQtNodeProperties.h" // CFlowGraphView::SetContextPin
+#include "FlowGraphQtNodeProperties.h"
 
 #include <NodeGraph/NodeWidget.h>
 #include <NodeGraph/PinWidget.h>
@@ -24,7 +24,7 @@
 #include <NodeGraph/ConnectionWidgetStyle.h>
 #include <NodeGraph/NodePinWidgetStyle.h>
 
-#include "HyperGraph/FlowGraphPreferences.h" // gFlowGraphColorPreferences (legacy node colors)
+#include "HyperGraph/FlowGraphPreferences.h"
 
 #include <CryIcon.h>
 #include <QtUtil.h>
@@ -46,21 +46,18 @@ namespace FlowGraphQt
 namespace
 {
 
-// Classic FlowGraph port colors, indexed by IVariable::EType, mirroring
-// PortTypeToColor[] in HyperNodePainter_Default.cpp. Values are 0x00RRGGBB
-// (the legacy code ORs alpha into the top byte, so the literals are RGB).
 const uint32 kPortColorTable[] =
 {
-	0x0000FF00, // UNKNOWN -> green
-	0x00FF0000, // INT     -> red
-	0x000050FF, // BOOL    -> blue
-	0x00FFFFFF, // FLOAT   -> white
-	0x00FF00FF, // VECTOR2 -> magenta
-	0x00FFFF00, // VECTOR  -> yellow
-	0x0000FFFF, // VECTOR4 -> cyan
-	0x007F00FF, // QUAT    -> purple
-	0x0000FFFF, // STRING  -> cyan
-	0x00FF7F00, // ARRAY   -> orange
+	0x0000FF00,
+	0x00FF0000,
+	0x000050FF,
+	0x00FFFFFF,
+	0x00FF00FF,
+	0x00FFFF00,
+	0x0000FFFF,
+	0x007F00FF,
+	0x0000FFFF,
+	0x00FF7F00,
 	0x0000FF7F,
 	0x007F7F7F,
 	0x00000000,
@@ -87,26 +84,20 @@ string MakePinStyleId(uint32 typeIndex)
 
 const char* PortTypeName(uint32 index)
 {
-	// Parallel to IVariable::EType.
 	static const char* names[] = { "Any", "Int", "Bool", "Float", "Vec2", "Vec3", "Vec4", "Quat", "String", "Array" };
 	return (index < (sizeof(names) / sizeof(names[0]))) ? names[index] : "";
 }
 
-// COLORREF (packed abgr; R is the low byte) -> QColor, matching the legacy
-// painter's GET_GDI_COLOR (GetRValue/GetGValue/GetBValue).
 QColor LegacyColor(COLORREF c)
 {
 	return QColor(int(c & 0xFF), int((c >> 8) & 0xFF), int((c >> 16) & 0xFF));
 }
 
-// The teal title-bar color the legacy painter fills the entity port with
-// (brushBackgroundSelected == colorNodeSelected).
 QColor EntityPortColor()
 {
 	return LegacyColor(gFlowGraphColorPreferences.colorNodeSelected);
 }
 
-//////////////////////////////////////////////////////////////////////////
 // Entity-target pin: drawn with the title-bar background (like the legacy
 // full-width entity bar) so it reads as a special port, not a normal input.
 class CFlowGraphEntityPinWidget : public CryGraphEditor::CPinWidget
@@ -116,8 +107,6 @@ public:
 		: CryGraphEditor::CPinWidget(item, nodeWidget, view, true)
 		, m_fillColor(EntityPortColor())
 	{
-		// These don't change for the pin's lifetime, so resolve them once rather
-		// than per paint.
 		const CryGraphEditor::CNodePinWidgetStyle& style =
 		  static_cast<const CryGraphEditor::CNodePinWidgetStyle&>(GetStyle());
 		m_textColor = style.GetHeaderTextStyle().GetTextColor();
@@ -127,18 +116,12 @@ public:
 
 	virtual void paint(QPainter* pPainter, const QStyleOptionGraphicsItem* pOption, QWidget* pWidget) override
 	{
-		// Full-width teal fill. The +1 (like CHeaderWidget::paint) covers the 1px
-		// body-colored seam on the right/bottom that otherwise reads as a border.
 		pPainter->save();
 		pPainter->setPen(Qt::NoPen);
 		pPainter->setBrush(m_fillColor);
 		pPainter->drawRect(boundingRect().adjusted(0, 0, 1, 1));
 		pPainter->restore();
 
-		// Draw the label ourselves, inset 6px on each side. We can't defer to the
-		// base paint: it draws at m_pName->rect() (pin-local 0,0), so layout
-		// margins don't move the text. The arrow icon is a separate child item
-		// and still renders. Skip the label at low zoom, mirroring the base.
 		if (GetView().GetZoom() >= 40)
 		{
 			pPainter->save();
@@ -155,17 +138,7 @@ private:
 	QFont  m_textFont;
 };
 
-//////////////////////////////////////////////////////////////////////////
-// Node body. Reimplements the pin grid rather than subclassing
-// CPinGridNodeContentWidget, whose layout counters are private and which can't
-// give the entity port its own row. Differences from the stock grid:
-//   - the entity port (first input of an EHYPER_NODE_ENTITY node) gets its own
-//     full-width row flush to the title, so the body is two layers: a margin-0
-//     outer column (entity bar + grid) wrapping the padded grid of normal ports.
-//   - a right-button release isn't consumed, so it reaches the node and the
-//     context menu works over ports; the hit port is recorded on the view so
-//     the menu can be entity- vs plain-port specific.
-// Hover/connection routing is otherwise copied from the stock grid.
+// Node body: the pin grid, with the target-entity port on its own full-width row.
 class CFlowGraphContentWidget : public CryGraphEditor::CAbstractNodeContentWidget
 {
 public:
@@ -180,20 +153,17 @@ public:
 	{
 		node.SetContentWidget(this);
 
-		// Outer layer: no margins, so the entity bar can sit flush to the title
-		// and span the full node width.
 		m_pOuterLayout = new QGraphicsLinearLayout(Qt::Vertical);
 		m_pOuterLayout->setContentsMargins(0.f, 0.f, 0.f, 0.f);
 		m_pOuterLayout->setSpacing(0.f);
 
-		// Inner layer: the regular ports keep the usual padding.
 		m_pGridLayout = new QGraphicsGridLayout();
 		m_pGridLayout->setColumnAlignment(0, Qt::AlignLeft);
 		m_pGridLayout->setColumnAlignment(1, Qt::AlignRight);
 		m_pGridLayout->setVerticalSpacing(2.f);
 		m_pGridLayout->setHorizontalSpacing(35.f);
 		m_pGridLayout->setContentsMargins(5.0f, 5.0f, 5.0f, 5.0f);
-		m_pOuterLayout->addItem(m_pGridLayout); // entity bar (if any) is inserted before this
+		m_pOuterLayout->addItem(m_pGridLayout);
 
 		CryGraphEditor::CAbstractNodeItem& nodeItem = node.GetItem();
 		nodeItem.SignalPinAdded.Connect(this, &CFlowGraphContentWidget::OnPinAdded);
@@ -277,7 +247,6 @@ public:
 
 		const EMouseEventReason reason = args.GetReason();
 
-		// Which pin (if any) is under the cursor?
 		CryGraphEditor::CPinWidget* pHitPinWidget = nullptr;
 		if (reason != EMouseEventReason::HoverLeave)
 		{
@@ -292,8 +261,6 @@ public:
 			}
 		}
 
-		// Right-click: record the port for the context menu and let the event
-		// fall through to the node (so the node menu shows over ports too).
 		if (reason == EMouseEventReason::ButtonRelease && args.GetButton() == Qt::MouseButton::RightButton)
 		{
 			CFlowGraphPinItem* pPin = pHitPinWidget ? static_cast<CFlowGraphPinItem*>(&pHitPinWidget->GetItem()) : nullptr;
@@ -302,7 +269,6 @@ public:
 			return;
 		}
 
-		// --- the remainder mirrors CPinGridNodeContentWidget::OnInputEvent ---
 		if (m_pLastEnteredPin != nullptr && (m_pLastEnteredPin != pHitPinWidget || pHitPinWidget == nullptr))
 		{
 			if (reason == EMouseEventReason::HoverLeave || reason == EMouseEventReason::HoverMove)
@@ -352,7 +318,6 @@ private:
 		CFlowGraphPinItem& item = static_cast<CFlowGraphPinItem&>(pinWidget.GetItem());
 		if (item.IsEntityPort())
 		{
-			// Flush, full-width bar above the padded grid.
 			pinWidget.setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 			m_pOuterLayout->insertItem(0, &pinWidget);
 			m_pEntityWidget = &pinWidget;
@@ -366,7 +331,6 @@ private:
 		UpdateLayout(m_pOuterLayout);
 	}
 
-	// Remove a pin from whichever layer holds it, without touching m_pins.
 	void DetachPin(CryGraphEditor::CPinWidget& pinWidget)
 	{
 		if (&pinWidget == m_pEntityWidget)
@@ -394,7 +358,7 @@ private:
 
 	void OnPinAdded(CryGraphEditor::CAbstractPinItem& item)
 	{
-		AddPin(*item.CreateWidget(GetNode(), GetView())); // AddPin already calls UpdateLayout
+		AddPin(*item.CreateWidget(GetNode(), GetView()));
 	}
 
 	void OnPinRemoved(CryGraphEditor::CAbstractPinItem& item)
@@ -416,19 +380,16 @@ private:
 		UpdateLayout(m_pOuterLayout);
 	}
 
-	QGraphicsLinearLayout*      m_pOuterLayout; // entity bar (flush) + grid
-	QGraphicsGridLayout*        m_pGridLayout;  // padded regular ports
+	QGraphicsLinearLayout*      m_pOuterLayout;
+	QGraphicsGridLayout*        m_pGridLayout;
 	CryGraphEditor::CPinWidget* m_pEntityWidget;
 	uint8                       m_numInputRows;
 	uint8                       m_numOutputRows;
 	CryGraphEditor::CPinWidget* m_pLastEnteredPin;
 };
 
-} // anonymous namespace
+}
 
-//////////////////////////////////////////////////////////////////////////
-// CFlowGraphPinItem
-//////////////////////////////////////////////////////////////////////////
 CFlowGraphPinItem::CFlowGraphPinItem(CFlowGraphNodeItem& nodeItem, CHyperNodePort& port, bool bInput, uint32 index, CryGraphEditor::CNodeGraphViewModel& model)
 	: CryGraphEditor::CAbstractPinItem(model)
 	, m_nodeItem(nodeItem)
@@ -450,8 +411,6 @@ CFlowGraphPinItem::CFlowGraphPinItem(CFlowGraphNodeItem& nodeItem, CHyperNodePor
 
 QString CFlowGraphPinItem::GetName() const
 {
-	// The target-entity port shows the assigned entity exactly like the legacy
-	// painter ("Choose Entity", the entity name, "<Graph Entity>", ...).
 	if (IsEntityPort())
 		return QtUtil::ToQString(static_cast<CFlowNode&>(m_nodeItem.GetHyperNode()).GetEntityTitle());
 
@@ -460,7 +419,6 @@ QString CFlowGraphPinItem::GetName() const
 
 QString CFlowGraphPinItem::GetToolTipText() const
 {
-	// Mirror the legacy hover tooltip: the port's description (with name/type for context).
 	QString tip = m_displayName;
 	if (!m_typeName.isEmpty())
 		tip += QStringLiteral(" (") + m_typeName + QStringLiteral(")");
@@ -493,7 +451,6 @@ CryGraphEditor::CAbstractNodeItem& CFlowGraphPinItem::GetNodeItem() const
 
 QVariant CFlowGraphPinItem::GetId() const
 {
-	// (index, direction) is unique within the owning node.
 	return QVariant(static_cast<uint>((m_index << 1) | (m_bInput ? 1u : 0u)));
 }
 
@@ -505,15 +462,13 @@ bool CFlowGraphPinItem::HasId(QVariant id) const
 bool CFlowGraphPinItem::CanConnect(const CryGraphEditor::CAbstractPinItem* pOtherPin) const
 {
 	if (!pOtherPin)
-		return true; // can a drag start from this pin at all
+		return true;
 
 	if (&pOtherPin->GetNodeItem() == &GetNodeItem())
 		return false;
 	if (IsInputPin() == pOtherPin->IsInputPin())
 		return false;
 
-	// Defer to the engine's real connection rules (type compatibility,
-	// duplicate-edge, etc.). CanConnectPorts is direction-agnostic.
 	const CFlowGraphPinItem& other = static_cast<const CFlowGraphPinItem&>(*pOtherPin);
 	CHyperGraph& graph = static_cast<CFlowGraphViewModel&>(GetViewModel()).GetHyperGraph();
 	CHyperNode& myNode = static_cast<CFlowGraphNodeItem&>(GetNodeItem()).GetHyperNode();
@@ -522,9 +477,6 @@ bool CFlowGraphPinItem::CanConnect(const CryGraphEditor::CAbstractPinItem* pOthe
 	return graph.CanConnectPorts(&myNode, &m_port, &otherNode, &other.GetPort());
 }
 
-//////////////////////////////////////////////////////////////////////////
-// CFlowGraphNodeItem
-//////////////////////////////////////////////////////////////////////////
 CFlowGraphNodeItem::CFlowGraphNodeItem(CHyperNode& node, CryGraphEditor::CNodeGraphViewModel& model)
 	: CryGraphEditor::CAbstractNodeItem(*(m_pData = new CryGraphEditor::CNodeEditorData()), model)
 	, m_node(node)
@@ -532,7 +484,7 @@ CFlowGraphNodeItem::CFlowGraphNodeItem(CHyperNode& node, CryGraphEditor::CNodeGr
 	m_name = QtUtil::ToQString(node.GetTitle());
 
 	SetAcceptsDeletion(!node.CheckFlag(EHYPER_NODE_UNREMOVEABLE));
-	SetAcceptsRenaming(false); // inline rename is a later milestone
+	SetAcceptsRenaming(false);
 
 	const Gdiplus::PointF pos = node.GetPos();
 	CryGraphEditor::CAbstractNodeItem::SetPosition(QPointF(pos.X, pos.Y));
@@ -555,7 +507,7 @@ void CFlowGraphNodeItem::LoadPins()
 	{
 		for (uint32 i = 0; i < pInputs->size(); ++i)
 		{
-			m_pins.push_back(new CFlowGraphPinItem(*this, (*pInputs)[i], /*bInput*/ true, i, GetViewModel()));
+			m_pins.push_back(new CFlowGraphPinItem(*this, (*pInputs)[i], true, i, GetViewModel()));
 		}
 	}
 
@@ -564,7 +516,7 @@ void CFlowGraphNodeItem::LoadPins()
 	{
 		for (uint32 i = 0; i < pOutputs->size(); ++i)
 		{
-			m_pins.push_back(new CFlowGraphPinItem(*this, (*pOutputs)[i], /*bInput*/ false, i, GetViewModel()));
+			m_pins.push_back(new CFlowGraphPinItem(*this, (*pOutputs)[i], false, i, GetViewModel()));
 		}
 	}
 }
@@ -620,9 +572,6 @@ CFlowGraphPinItem* CFlowGraphNodeItem::FindPinByInternalName(const QString& inte
 	return nullptr;
 }
 
-//////////////////////////////////////////////////////////////////////////
-// CFlowGraphConnectionItem
-//////////////////////////////////////////////////////////////////////////
 CFlowGraphConnectionItem::CFlowGraphConnectionItem(CHyperEdge& edge, CFlowGraphPinItem& sourcePin, CFlowGraphPinItem& targetPin, CryGraphEditor::CNodeGraphViewModel& model)
 	: CryGraphEditor::CAbstractConnectionItem(model)
 	, m_edge(edge)
@@ -654,14 +603,9 @@ bool CFlowGraphConnectionItem::HasId(QVariant id) const
 	return reinterpret_cast<quintptr>(&m_edge) == id.value<quintptr>();
 }
 
-//////////////////////////////////////////////////////////////////////////
-// Style
-//////////////////////////////////////////////////////////////////////////
 namespace
 {
 
-// The legacy painter uses Tahoma 10.13pt for title + ports (HyperNodePainter_Default).
-// As a point size it now scales correctly with DPI (the whole reason for the port).
 QFont LegacyNodeFont()
 {
 	QFont font(QStringLiteral("Tahoma"));
@@ -669,25 +613,17 @@ QFont LegacyNodeFont()
 	return font;
 }
 
-// The CNodeGraphViewStyle ctor pre-registers default "Node"/"Connection"/"Pin"
-// ids; re-registering them asserts, and the icon-less default "Pin" crashes the
-// painter. So we register suffixed ids and return those from GetStyleId().
 void AddNodeStyle(CryGraphEditor::CNodeGraphViewStyle& viewStyle, const char* szStyleId)
 {
 	const SFlowGraphColorPreferences& prefs = gFlowGraphColorPreferences;
 	const QColor bodyColor = LegacyColor(prefs.colorNodeBkg);
 	const QColor outlineColor = LegacyColor(prefs.colorNodeOutline);
 	const QColor titleTextColor = LegacyColor(prefs.colorTitleText);
-	// The legacy painter fills the title bar with brushBackgroundSelected
-	// (colorNodeSelected) regardless of selection state -> the teal title bar.
 	const QColor titleBarColor = LegacyColor(prefs.colorNodeSelected);
 
 	CryGraphEditor::CNodeWidgetStyle* pStyle = new CryGraphEditor::CNodeWidgetStyle(szStyleId, viewStyle);
 	pStyle->SetBackgroundColor(bodyColor);
 	pStyle->SetBorderColor(outlineColor);
-	// No body inset: the node wraps the content in a margin (default 6,3,6,6),
-	// which would pad the full-width entity bar away from the title and edges.
-	// The regular-port padding is supplied by the content's own inner grid.
 	pStyle->SetMargins(QMargins(0, 0, 0, 0));
 
 	const QFont nodeFont = LegacyNodeFont();
@@ -699,11 +635,8 @@ void AddNodeStyle(CryGraphEditor::CNodeGraphViewStyle& viewStyle, const char* sz
 	CryGraphEditor::CHeaderWidgetStyle& headerStyle = pStyle->GetHeaderWidgetStyle();
 	headerStyle.SetLeftColor(titleBarColor);
 	headerStyle.SetRightColor(titleBarColor);
-	// Legacy title bar height == the title text height (no extra padding).
 	headerStyle.SetHeight(QFontMetrics(nodeFont).height() + 4);
 
-	// Remove the title image: a null icon makes CHeaderWidget skip the icon slot
-	// entirely (so the title sits flush-left).
 	headerStyle.SetNodeIcon(QIcon());
 	// cppcheck-suppress memleak
 }
@@ -714,9 +647,8 @@ void AddPinStyle(CryGraphEditor::CNodeGraphViewStyle& viewStyle, const char* szS
 
 	CryGraphEditor::CNodePinWidgetStyle* pStyle = new CryGraphEditor::CNodePinWidgetStyle(szStyleId, viewStyle);
 	pStyle->SetIcon(icon);
-	pStyle->SetColor(color);                 // pin connector dot keeps its per-type color
-	pStyle->SetTextFont(LegacyNodeFont());   // pin name font (PinWidget reads this directly)
-	// Pin name color: PinWidget now reads it from the pin's header text style.
+	pStyle->SetColor(color);
+	pStyle->SetTextFont(LegacyNodeFont());
 	pStyle->GetHeaderTextStyle().SetTextColor(LegacyColor(gFlowGraphColorPreferences.colorText));
 	// cppcheck-suppress memleak
 }
@@ -725,8 +657,8 @@ void AddConnectionStyle(CryGraphEditor::CNodeGraphViewStyle& viewStyle, const ch
 {
 	CryGraphEditor::CConnectionWidgetStyle* pStyle = new CryGraphEditor::CConnectionWidgetStyle(szStyleId, viewStyle);
 	pStyle->SetWidth(width);
-	pStyle->SetUsePinColors(false);    // legacy wires are a single color, not a pin gradient
-	pStyle->SetColor(QColor(0, 0, 0)); // black, like the legacy edges
+	pStyle->SetUsePinColors(false);
+	pStyle->SetColor(QColor(0, 0, 0));
 	// cppcheck-suppress memleak
 }
 
@@ -734,15 +666,12 @@ CryGraphEditor::CNodeGraphViewStyle* CreateStyle()
 {
 	CryGraphEditor::CNodeGraphViewStyle* pViewStyle = new CryGraphEditor::CNodeGraphViewStyle("FlowGraphQt");
 
-	// Canvas grid colors copied from the legacy FlowGraph preferences.
 	pViewStyle->SetGridBackgroundColor(LegacyColor(gFlowGraphColorPreferences.colorBackground));
 	pViewStyle->SetGridSegmentLineColor(LegacyColor(gFlowGraphColorPreferences.colorGrid));
 	pViewStyle->SetGridSubSegmentLineColor(LegacyColor(gFlowGraphColorPreferences.colorGrid));
 
 	AddNodeStyle(*pViewStyle, "Node::FlowGraph");
 
-	// One pin style per IVariable::EType, matching the legacy FlowGraph palette.
-	// Ports are drawn as colored arrows (like the legacy nodes), not dots.
 	for (uint32 i = 0; i < kPortColorCount; ++i)
 	{
 		AddPinStyle(*pViewStyle, MakePinStyleId(i).c_str(), "icons:Graph/Node_connection_arrow_R.ico", PortColor(i));
@@ -753,11 +682,8 @@ CryGraphEditor::CNodeGraphViewStyle* CreateStyle()
 	return pViewStyle;
 }
 
-} // anonymous namespace
+}
 
-//////////////////////////////////////////////////////////////////////////
-// CFlowGraphDictionaryEntry
-//////////////////////////////////////////////////////////////////////////
 CFlowGraphDictionaryEntry::CFlowGraphDictionaryEntry(const QString& name, uint32 type, CFlowGraphDictionaryEntry* pParent)
 	: m_name(name)
 	, m_type(type)
@@ -783,9 +709,6 @@ void CFlowGraphDictionaryEntry::AddNode(const QString& name, const QString& clas
 	m_children.push_back(std::move(pEntry));
 }
 
-//////////////////////////////////////////////////////////////////////////
-// CFlowGraphNodesDictionary
-//////////////////////////////////////////////////////////////////////////
 CFlowGraphNodesDictionary::CFlowGraphNodesDictionary()
 {
 	Build();
@@ -813,7 +736,7 @@ std::vector<SFlowNodeClass> EnumerateFlowNodeClasses()
 	const uint32 categoryMask = EFLN_APPROVED | EFLN_ADVANCED | EFLN_DEBUG;
 
 	std::vector<THyperNodePtr> prototypes;
-	pManager->GetPrototypesEx(prototypes, /*bForUI*/ true);
+	pManager->GetPrototypesEx(prototypes, true);
 
 	for (const THyperNodePtr& pProto : prototypes)
 	{
@@ -829,7 +752,6 @@ std::vector<SFlowNodeClass> EnumerateFlowNodeClasses()
 		if (uiName.isEmpty())
 			continue;
 
-		// Split "Group:Sub:Leaf"; nodes without a group fall under "Misc".
 		QStringList parts = uiName.split(QLatin1Char(':'));
 		parts.removeAll(QString());
 		if (parts.size() < 2)
@@ -848,7 +770,7 @@ std::vector<SFlowNodeClass> EnumerateFlowNodeClasses()
 
 void CFlowGraphNodesDictionary::Build()
 {
-	std::map<QString, CFlowGraphDictionaryEntry*> folders; // accumulated "A:B:" path -> folder
+	std::map<QString, CFlowGraphDictionaryEntry*> folders;
 
 	for (const SFlowNodeClass& cls : EnumerateFlowNodeClasses())
 	{
@@ -885,9 +807,6 @@ void CFlowGraphNodesDictionary::Build()
 	}
 }
 
-//////////////////////////////////////////////////////////////////////////
-// CFlowGraphRuntimeContext
-//////////////////////////////////////////////////////////////////////////
 CFlowGraphRuntimeContext::CFlowGraphRuntimeContext()
 	: m_pStyle(CreateStyle())
 {
@@ -899,9 +818,6 @@ CFlowGraphRuntimeContext::~CFlowGraphRuntimeContext()
 		m_pStyle->deleteLater();
 }
 
-//////////////////////////////////////////////////////////////////////////
-// CFlowGraphViewModel
-//////////////////////////////////////////////////////////////////////////
 CFlowGraphViewModel::CFlowGraphViewModel(CHyperGraph& graph)
 	: m_graph(graph)
 {
@@ -950,9 +866,8 @@ void CFlowGraphViewModel::BuildConnections()
 		if (srcIt == m_nodesById.end() || dstIt == m_nodesById.end())
 			continue;
 
-		// nodeOut/portOut is the OUTPUT side (source); nodeIn/portIn the INPUT side (target).
-		CFlowGraphPinItem* pSrcPin = srcIt->second->FindPinByInternalName(QtUtil::ToQString(pEdge->portOut), /*bInput*/ false);
-		CFlowGraphPinItem* pDstPin = dstIt->second->FindPinByInternalName(QtUtil::ToQString(pEdge->portIn), /*bInput*/ true);
+		CFlowGraphPinItem* pSrcPin = srcIt->second->FindPinByInternalName(QtUtil::ToQString(pEdge->portOut), false);
+		CFlowGraphPinItem* pDstPin = dstIt->second->FindPinByInternalName(QtUtil::ToQString(pEdge->portIn), true);
 		if (!pSrcPin || !pDstPin)
 			continue;
 
@@ -995,7 +910,7 @@ CryGraphEditor::CAbstractConnectionItem* CFlowGraphViewModel::GetConnectionItemB
 void CFlowGraphViewModel::MaybeRecordUndo()
 {
 	if (!m_suppressUndo)
-		m_graph.RecordUndo(); // self-guards on CUndo::IsRecording()
+		m_graph.RecordUndo();
 }
 
 CryGraphEditor::CAbstractNodeItem* CFlowGraphViewModel::CreateNode(QVariant typeId, const QPointF& position)
@@ -1029,13 +944,10 @@ bool CFlowGraphViewModel::RemoveNode(CryGraphEditor::CAbstractNodeItem& node)
 	if (indexIt == m_nodesByIndex.end())
 		return false;
 
-	// One undo snapshot for the whole deletion; the cascade below must not add more.
 	MaybeRecordUndo();
 	const bool wasSuppressed = m_suppressUndo;
 	m_suppressUndo = true;
 
-	// Tear down our connection items first (removes the edges + widgets, keeps
-	// pins valid until the node item itself is destroyed).
 	const CryGraphEditor::PinItemArray pins = pItem->GetPinItems();
 	for (CryGraphEditor::CAbstractPinItem* pPin : pins)
 	{
@@ -1054,7 +966,7 @@ bool CFlowGraphViewModel::RemoveNode(CryGraphEditor::CAbstractNodeItem& node)
 	m_nodesByIndex.erase(indexIt);
 	m_nodesById.erase(id);
 
-	m_graph.RemoveNode(&hyperNode); // engine-side removal (also clears any stray edges)
+	m_graph.RemoveNode(&hyperNode);
 	m_graph.SetModified();
 
 	delete pItem;
@@ -1069,19 +981,14 @@ CryGraphEditor::CAbstractConnectionItem* CFlowGraphViewModel::CreateConnection(C
 	if (!src.CanConnect(&tgt))
 		return nullptr;
 
-	// Normalize to output(source) -> input(target); the framework may hand us
-	// the pins in either drag order.
 	CFlowGraphPinItem& outPin = src.IsOutputPin() ? src : tgt;
 	CFlowGraphPinItem& inPin = src.IsOutputPin() ? tgt : src;
 
 	CHyperNode& outNode = static_cast<CFlowGraphNodeItem&>(outPin.GetNodeItem()).GetHyperNode();
 	CHyperNode& inNode = static_cast<CFlowGraphNodeItem&>(inPin.GetNodeItem()).GetHyperNode();
 
-	// One undo snapshot for the whole connect (including any conflict removal below).
 	MaybeRecordUndo();
 
-	// ConnectPorts silently drops conflicting edges on non-multi ports. Mirror
-	// that here first so we don't leave stale connection items/widgets behind.
 	auto removeConflicting = [this](CFlowGraphPinItem& pin)
 	{
 		if (pin.GetPort().bAllowMulti)
@@ -1099,7 +1006,6 @@ CryGraphEditor::CAbstractConnectionItem* CFlowGraphViewModel::CreateConnection(C
 	if (!m_graph.ConnectPorts(&outNode, &outPin.GetPort(), &inNode, &inPin.GetPort()))
 		return nullptr;
 
-	// Retrieve the edge ConnectPorts just made (keyed by the input port).
 	CHyperEdge* pEdge = m_graph.FindEdge(&inNode, &inPin.GetPort());
 	if (!pEdge)
 		return nullptr;
@@ -1132,4 +1038,4 @@ bool CFlowGraphViewModel::RemoveConnection(CryGraphEditor::CAbstractConnectionIt
 	return true;
 }
 
-} // namespace FlowGraphQt
+}

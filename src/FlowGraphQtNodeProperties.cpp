@@ -3,7 +3,7 @@
 #include "StdAfx.h"
 #include "FlowGraphQtNodeProperties.h"
 
-#include "FlowGraphQtViewModel.h" // CFlowGraphNodeItem, CFlowGraphViewModel
+#include "FlowGraphQtViewModel.h"
 
 #include "IEditorImpl.h"
 #include "IUndoObject.h"
@@ -14,8 +14,8 @@
 #include "HyperGraph/HyperGraph.h"
 #include "HyperGraph/FlowGraphNode.h"
 #include "HyperGraph/FlowGraphManager.h"
-#include "HyperGraph/IHyperGraph.h" // EHG_NODE_UPDATE_ENTITY
-#include <Util/Variable.h>          // CVarBlock
+#include "HyperGraph/IHyperGraph.h"
+#include <Util/Variable.h>
 
 #include <QAdvancedPropertyTreeLegacy.h>
 #include <CrySerialization/IArchive.h>
@@ -35,13 +35,10 @@
 namespace FlowGraphQt
 {
 
-// The property tree treats a leading '!' in a row label as "read-only".
 void SFlowNodeInspector::Serialize(Serialization::IArchive& ar)
 {
 	if (pNode && pNode->CheckFlag(EHYPER_NODE_ENTITY))
 	{
-		// Read-only mirror of the entity bar: the target entity is assigned via
-		// the bar / right-click menu, not typed here.
 		string entity = static_cast<CFlowNode*>(pNode)->GetEntityTitle().GetString();
 		ar(entity, "entity", "!Entity");
 	}
@@ -54,9 +51,6 @@ CFlowGraphNodePropertiesWidget::CFlowGraphNodePropertiesWidget(CHyperNode& node)
 	: m_node(node)
 	, m_pTree(nullptr)
 {
-	// Live port IVariables (not clones). For entity nodes, skip the first input:
-	// it's the target-entity port, surfaced instead as the read-only "Entity"
-	// row above (and as the node's entity bar). The painter likewise skips it.
 	m_inspector.pNode = &node;
 	m_inspector.pPorts = new CVarBlock;
 	const bool isEntityNode = node.CheckFlag(EHYPER_NODE_ENTITY);
@@ -98,13 +92,11 @@ CFlowGraphNodePropertiesWidget::~CFlowGraphNodePropertiesWidget()
 void CFlowGraphNodePropertiesWidget::OnBeginUndo()
 {
 	GetIEditorImpl()->GetIUndoManager()->Begin();
-	m_node.RecordUndo(); // snapshot the node before the edit
+	m_node.RecordUndo();
 }
 
 void CFlowGraphNodePropertiesWidget::OnChanged()
 {
-	// The edited IVariables are the node's live ports; push the change to the
-	// node (and runtime flownode) and mark it modified + needing redraw.
 	m_node.OnInputsChanged();
 	m_node.Invalidate(true, true);
 }
@@ -117,18 +109,13 @@ void CFlowGraphNodePropertiesWidget::OnEndUndo(bool undoAccepted)
 		GetIEditorImpl()->GetIUndoManager()->Cancel();
 }
 
-//////////////////////////////////////////////////////////////////////////
 bool CFlowGraphView::event(QEvent* pEvent)
 {
-	// Tab summons the add-node search popup, centered in the view. We catch it in
-	// event() because Qt's focus traversal consumes Tab before keyPressEvent. The
-	// popup focuses its search box on show (CDictionaryWidget::showEvent).
 	if (pEvent->type() == QEvent::KeyPress)
 	{
 		QKeyEvent* pKeyEvent = static_cast<QKeyEvent*>(pEvent);
 		if (pKeyEvent->key() == Qt::Key_Tab && pKeyEvent->modifiers() == Qt::NoModifier)
 		{
-			// Open at the cursor (the node is created at the menu position).
 			const QPoint cursor = QCursor::pos();
 			m_openAddNodeFromTab = true;
 			ShowGraphContextMenu(QPointF(cursor.x(), cursor.y()));
@@ -150,7 +137,7 @@ bool CFlowGraphView::eventFilter(QObject* pWatched, QEvent* pEvent)
 			{
 				if (pPopup->isVisible())
 				{
-					pPopup->hide(); // SignalHide -> OnContextMenuAbort (+ our action reset)
+					pPopup->hide();
 					return true;
 				}
 			}
@@ -162,26 +149,16 @@ bool CFlowGraphView::eventFilter(QObject* pWatched, QEvent* pEvent)
 
 void CFlowGraphView::ShowGraphContextMenu(QPointF screenPos)
 {
-	// Unreal-like: only Tab opens the add-node search on empty canvas - not
-	// right-click (and not the A-Z letter shortcut). Still allow the connection
-	// drag-to-empty flow (eAction_ConnectionCreation), or releasing the wire
-	// would leave that action stuck.
 	const bool fromConnectionDrag = (GetAction() == eAction_ConnectionCreation);
 	if (!m_openAddNodeFromTab && !fromConnectionDrag)
 		return;
 	m_openAddNodeFromTab = false;
 
-	// Framework quirk: when the add-node menu is dismissed without picking a node,
-	// OnContextMenuAbort only resets the connection-creation variant, so m_action
-	// stays stuck at eAction_AddNodeMenu and ShowGraphContextMenu early-returns
-	// forever after. Clear that stuck state so the menu can reopen.
 	if (GetAction() == eAction_AddNodeMenu)
 		AbortAction();
 
 	CryGraphEditor::CNodeGraphView::ShowGraphContextMenu(screenPos);
 
-	// The popup's search box (auto-focused) swallows key events, so the view never
-	// sees Esc. Filter the popup content + its children once so Esc can close it.
 	if (!m_contextMenuFilterInstalled)
 	{
 		if (CDictionaryWidget* pContent = GetContextMenuContent())
@@ -195,7 +172,6 @@ void CFlowGraphView::ShowGraphContextMenu(QPointF screenPos)
 	}
 }
 
-//////////////////////////////////////////////////////////////////////////
 QWidget* CFlowGraphView::CreatePropertiesWidget(CryGraphEditor::GraphItemSet& selectedItems)
 {
 	if (selectedItems.size() == 1)
@@ -203,7 +179,6 @@ QWidget* CFlowGraphView::CreatePropertiesWidget(CryGraphEditor::GraphItemSet& se
 		CryGraphEditor::CAbstractNodeGraphViewModelItem* pItem = *selectedItems.begin();
 		if (CryGraphEditor::CAbstractNodeItem* pNodeItem = pItem->Cast<CryGraphEditor::CAbstractNodeItem>())
 		{
-			// Every node item in our model is a CFlowGraphNodeItem.
 			CFlowGraphNodeItem* pFlowItem = static_cast<CFlowGraphNodeItem*>(pNodeItem);
 			return new CFlowGraphNodePropertiesWidget(pFlowItem->GetHyperNode());
 		}
@@ -212,16 +187,13 @@ QWidget* CFlowGraphView::CreatePropertiesWidget(CryGraphEditor::GraphItemSet& se
 	return CryGraphEditor::CNodeGraphView::CreatePropertiesWidget(selectedItems);
 }
 
-//////////////////////////////////////////////////////////////////////////
-// Entity-target context menu (mirrors CHyperGraphView::AddEntityMenu /
-// UpdateNodeEntity / OnSelectEntity for the legacy MFC editor).
+// Entity-target context menu
 
 std::vector<CFlowGraphNodeItem*> CFlowGraphView::CollectEntityNodes(CFlowGraphNodeItem& clicked) const
 {
 	std::set<CFlowGraphNodeItem*> seen;
 	std::vector<CFlowGraphNodeItem*> result;
 
-	// Entity-target flow nodes carry the EHYPER_NODE_ENTITY flag.
 	auto add = [&](CFlowGraphNodeItem* pItem)
 	{
 		if (pItem && pItem->GetHyperNode().CheckFlag(EHYPER_NODE_ENTITY) && seen.insert(pItem).second)
@@ -248,7 +220,7 @@ void CFlowGraphView::AssignEntities(const std::vector<CFlowGraphNodeItem*>& node
 
 	CUndo undo("Assign FlowGraph Node Entity");
 	if (pGraph)
-		pGraph->RecordUndo(); // one snapshot for the whole gesture; self-guards on IsRecording
+		pGraph->RecordUndo();
 
 	for (CFlowGraphNodeItem* pItem : nodes)
 	{
@@ -268,9 +240,6 @@ void CFlowGraphView::AssignEntities(const std::vector<CFlowGraphNodeItem*>& node
 	if (pGraph)
 	{
 		pGraph->SetModified();
-		// Rebuild the projection: the entity-port label + the node title both
-		// change, and rebuilding is the simplest way to refresh the reused pin
-		// widgets. The dockable's listener catches this and reprojects.
 		pGraph->SendNotifyEvent(nullptr, EHG_NODE_UPDATE_ENTITY);
 	}
 }
@@ -290,22 +259,17 @@ void CFlowGraphView::SelectAssignedEntities(const std::vector<CFlowGraphNodeItem
 
 bool CFlowGraphView::PopulateNodeContextMenu(CryGraphEditor::CAbstractNodeItem& node, QMenu& menu)
 {
-	// Consume the port recorded by the content widget for this menu request.
 	CFlowGraphPinItem* const pContextPin = m_pContextPin;
 	m_pContextPin = nullptr;
 
-	// The entity commands belong on the entity port or on the node body/title
-	// (pContextPin == null) - NOT on ordinary ports, which in the legacy editor
-	// carry the breakpoint/debug menu instead.
 	if (pContextPin && !pContextPin->IsEntityPort())
 		return false;
 
-	// Every node item in our model is a CFlowGraphNodeItem.
 	CFlowGraphNodeItem& clicked = static_cast<CFlowGraphNodeItem&>(node);
 
 	const std::vector<CFlowGraphNodeItem*> entityNodes = CollectEntityNodes(clicked);
 	if (entityNodes.empty())
-		return false; // not an entity node (and nothing selected that is)
+		return false;
 
 	const struct { const char* label; EEntityAssign mode; } assignActions[] =
 	{
@@ -326,4 +290,4 @@ bool CFlowGraphView::PopulateNodeContextMenu(CryGraphEditor::CAbstractNodeItem& 
 	return true;
 }
 
-} // namespace FlowGraphQt
+}

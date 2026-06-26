@@ -14,7 +14,7 @@
 #include <NodeGraph/ICryGraphEditor.h>
 #include <Controls/DictionaryWidget.h>
 
-#include "HyperGraph/IHyperGraph.h" // HyperNodeID
+#include "HyperGraph/IHyperGraph.h"
 
 #include <CryString/CryString.h>
 
@@ -46,22 +46,20 @@ namespace FlowGraphQt
 class CFlowGraphViewModel;
 class CFlowGraphNodeItem;
 
-//////////////////////////////////////////////////////////////////////////
 // A UI-visible flownode class, classified into its category folder path.
 // Shared by the canvas add-node dictionary and the sidebar node palette.
 struct SFlowNodeClass
 {
-	QStringList categoryPath; // folder path, e.g. {"Misc"} or {"Entity","Light"}
-	QString     leaf;         // display name shown for the node
-	QString     className;    // engine class name (CreateNode identifier)
-	QString     uiName;       // full GetUIClassName(), for keyword filtering
+	QStringList categoryPath;
+	QString     leaf;
+	QString     className;
+	QString     uiName;
 };
 
 // Enumerates all UI-visible flownode classes (APPROVED|ADVANCED|DEBUG), each
 // split into a category folder path + leaf by GetUIClassName().
 std::vector<SFlowNodeClass> EnumerateFlowNodeClasses();
 
-//////////////////////////////////////////////////////////////////////////
 // Pin: wraps a single CHyperNodePort (input or output).
 class CFlowGraphPinItem : public CryGraphEditor::CAbstractPinItem
 {
@@ -69,15 +67,14 @@ public:
 	CFlowGraphPinItem(CFlowGraphNodeItem& nodeItem, CHyperNodePort& port, bool bInput, uint32 index, CryGraphEditor::CNodeGraphViewModel& model);
 	virtual ~CFlowGraphPinItem();
 
-	// CryGraphEditor::CAbstractPinItem
 	virtual CryGraphEditor::CPinWidget*        CreateWidget(CryGraphEditor::CNodeWidget& nodeWidget, CryGraphEditor::CNodeGraphView& view) override;
 	virtual const char*                        GetStyleId() const override { return m_styleId.c_str(); }
 	virtual CryGraphEditor::CAbstractNodeItem& GetNodeItem() const override;
 
-	virtual QString  GetName() const override; // entity port shows the entity title
+	virtual QString  GetName() const override;
 	virtual QString  GetDescription() const override { return m_description; }
 	virtual QString  GetTypeName() const override    { return m_typeName; }
-	virtual QString  GetToolTipText() const override; // port description on hover
+	virtual QString  GetToolTipText() const override;
 
 	virtual QVariant GetId() const override;
 	virtual bool     HasId(QVariant id) const override;
@@ -86,14 +83,10 @@ public:
 	virtual bool     IsOutputPin() const override    { return !m_bInput; }
 
 	virtual bool     CanConnect(const CryGraphEditor::CAbstractPinItem* pOtherPin) const override;
-	// ~CryGraphEditor::CAbstractPinItem
 
 	const QString&   GetInternalName() const    { return m_internalName; }
 	CHyperNodePort&  GetPort() const             { return m_port; }
 
-	// The target-entity port: the first input of an EHYPER_NODE_ENTITY node.
-	// The legacy painter draws it as a title-colored bar and gives it the
-	// entity-assignment context menu.
 	bool             IsEntityPort() const;
 
 private:
@@ -109,7 +102,6 @@ private:
 	bool                m_bInput;
 };
 
-//////////////////////////////////////////////////////////////////////////
 // Node: wraps a CHyperNode and exposes its input/output ports as pins.
 class CFlowGraphNodeItem : public CryGraphEditor::CAbstractNodeItem
 {
@@ -117,7 +109,6 @@ public:
 	CFlowGraphNodeItem(CHyperNode& node, CryGraphEditor::CNodeGraphViewModel& model);
 	virtual ~CFlowGraphNodeItem();
 
-	// CryGraphEditor::CAbstractNodeItem
 	virtual CryGraphEditor::CNodeWidget*        CreateWidget(CryGraphEditor::CNodeGraphView& view) override;
 	virtual const char*                         GetStyleId() const override { return "Node::FlowGraph"; }
 
@@ -130,13 +121,10 @@ public:
 
 	virtual const CryGraphEditor::PinItemArray& GetPinItems() const override { return m_pins; }
 	virtual QString                             GetToolTipText() const override { return GetName(); }
-	// ~CryGraphEditor::CAbstractNodeItem
 
 	CHyperNode&        GetHyperNode() const { return m_node; }
 	HyperNodeID        GetHyperNodeId() const;
 
-	// Resolves a pin by its internal (engine) port name + direction. Used to
-	// rebuild edges, which reference ports by name string.
 	CFlowGraphPinItem* FindPinByInternalName(const QString& internalName, bool bInput) const;
 
 private:
@@ -147,7 +135,6 @@ private:
 	CryGraphEditor::CNodeEditorData* m_pData;
 };
 
-//////////////////////////////////////////////////////////////////////////
 // Connection: wraps a CHyperEdge (output pin -> input pin).
 class CFlowGraphConnectionItem : public CryGraphEditor::CAbstractConnectionItem
 {
@@ -155,7 +142,6 @@ public:
 	CFlowGraphConnectionItem(CHyperEdge& edge, CFlowGraphPinItem& sourcePin, CFlowGraphPinItem& targetPin, CryGraphEditor::CNodeGraphViewModel& model);
 	virtual ~CFlowGraphConnectionItem();
 
-	// CryGraphEditor::CAbstractConnectionItem
 	virtual CryGraphEditor::CConnectionWidget* CreateWidget(CryGraphEditor::CNodeGraphView& view) override;
 	virtual const char*                        GetStyleId() const override { return "Connection::FlowGraph"; }
 
@@ -164,7 +150,6 @@ public:
 
 	virtual QVariant                           GetId() const override;
 	virtual bool                               HasId(QVariant id) const override;
-	// ~CryGraphEditor::CAbstractConnectionItem
 
 	CHyperEdge& GetEdge() const { return m_edge; }
 
@@ -174,7 +159,6 @@ private:
 	CFlowGraphPinItem& m_targetPin;
 };
 
-//////////////////////////////////////////////////////////////////////////
 // One node-dictionary entry: either a category folder (with children) or a
 // leaf that creates a flownode. Leaves carry the engine class name as the
 // identifier the view model's CreateNode() expects.
@@ -195,13 +179,12 @@ public:
 
 private:
 	QString                                                 m_name;
-	QString                                                 m_className; // set on leaf entries only
+	QString                                                 m_className;
 	uint32                                                  m_type;
 	CFlowGraphDictionaryEntry*                              m_pParent;
 	std::vector<std::unique_ptr<CFlowGraphDictionaryEntry>> m_children;
 };
 
-//////////////////////////////////////////////////////////////////////////
 // Node-creation dictionary: the flownode classes (grouped by GetUIClassName,
 // masked to APPROVED|ADVANCED|DEBUG) shown in the canvas right-click search.
 class CFlowGraphNodesDictionary : public CAbstractDictionary
@@ -226,7 +209,6 @@ private:
 	std::vector<std::unique_ptr<CFlowGraphDictionaryEntry>> m_roots;
 };
 
-//////////////////////////////////////////////////////////////////////////
 // Runtime context: owns the view style and the node dictionary.
 class CFlowGraphRuntimeContext : public CryGraphEditor::INodeGraphRuntimeContext
 {
@@ -243,7 +225,6 @@ private:
 	CryGraphEditor::CNodeGraphViewStyle* m_pStyle;
 };
 
-//////////////////////////////////////////////////////////////////////////
 // View model: projects a CHyperGraph, eagerly building all node/connection items.
 class CFlowGraphViewModel : public CryGraphEditor::CNodeGraphViewModel
 {
@@ -258,7 +239,6 @@ public:
 	virtual CryGraphEditor::CAbstractNodeItem*        GetNodeItemByIndex(uint32 index) const override;
 	virtual CryGraphEditor::CAbstractNodeItem*        GetNodeItemById(QVariant id) const override;
 
-	// typeId is the flownode class name (QString).
 	virtual CryGraphEditor::CAbstractNodeItem*        CreateNode(QVariant typeId, const QPointF& position = QPointF()) override;
 	virtual bool                                      RemoveNode(CryGraphEditor::CAbstractNodeItem& node) override;
 
@@ -275,8 +255,6 @@ private:
 	void BuildNodes();
 	void BuildConnections();
 
-	// Snapshots the graph for undo (no-op while suppressed or not recording).
-	// The NodeGraph view already opens the CUndo step around the gesture.
 	void MaybeRecordUndo();
 
 	CHyperGraph&             m_graph;
@@ -286,7 +264,7 @@ private:
 	std::map<HyperNodeID, CFlowGraphNodeItem*> m_nodesById;
 	std::vector<CFlowGraphConnectionItem*> m_connectionsByIndex;
 
-	bool m_suppressUndo = false; // true during internal cascades (one snapshot per user action)
+	bool m_suppressUndo = false;
 };
 
-} // namespace FlowGraphQt
+}

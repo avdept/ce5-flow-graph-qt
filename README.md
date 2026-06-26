@@ -5,6 +5,9 @@ existing `CryGraphEditor` NodeGraph framework. It renders and edits the same
 `CHyperGraph`/`CFlowGraphManager` graphs as the legacy MFC HyperGraph editor,
 which doesn't scale on high-DPI displays.
 
+<img width="3840" height="2160" alt="Screenshot (5)" src="https://github.com/user-attachments/assets/3fb2ac1f-1e07-445c-af6a-b3e8fcbc4641" />
+
+
 Registers a pane under **Tools -> "FlowGraph Qt"**, alongside the legacy editor.
 
 By default engine still uses old MFC based FlowGraph, so you need to open it via toolbar menu and select your flowgraph from sidebar

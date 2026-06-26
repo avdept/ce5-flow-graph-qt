@@ -32,7 +32,7 @@ class CFlowGraphPinItem;
 struct SFlowNodeInspector
 {
 	CHyperNode*           pNode = nullptr;
-	_smart_ptr<CVarBlock> pPorts; // editable ports (entity target port excluded)
+	_smart_ptr<CVarBlock> pPorts;
 
 	void Serialize(Serialization::IArchive& ar);
 };
@@ -49,7 +49,7 @@ private:
 	void OnChanged();
 
 	CHyperNode&          m_node;
-	SFlowNodeInspector   m_inspector; // owns the ports var block; attached to the tree
+	SFlowNodeInspector   m_inspector;
 	QPropertyTreeLegacy* m_pTree;
 };
 
@@ -59,39 +59,26 @@ class CFlowGraphView : public CryGraphEditor::CNodeGraphView
 public:
 	using CryGraphEditor::CNodeGraphView::CNodeGraphView;
 
-	// Tab opens the add-node search popup at the cursor (Qt's focus system eats
-	// Tab before keyPressEvent, so we intercept it here).
 	virtual bool     event(QEvent* pEvent) override;
 
-	// Closes the add-node popup on Esc. Its search box has focus while open, so
-	// the view never sees the key; filter it on the popup's widgets instead.
 	virtual bool     eventFilter(QObject* pWatched, QEvent* pEvent) override;
 
-	// Works around a framework quirk where a dismissed add-node menu leaves the
-	// view's action stuck, blocking the menu (right-click and Tab) from reopening.
 	virtual void     ShowGraphContextMenu(QPointF screenPos) override;
 
 	virtual QWidget* CreatePropertiesWidget(CryGraphEditor::GraphItemSet& selectedItems) override;
 
-	// Adds the entity-target commands ("Assign Selected Entity", etc.) for nodes
-	// that carry the EHYPER_NODE_ENTITY flag, mirroring the legacy MFC menu.
 	virtual bool     PopulateNodeContextMenu(CryGraphEditor::CAbstractNodeItem& node, QMenu& menu) override;
 
-	// The port under the cursor when the context menu was requested (null = the
-	// node body/title). The content widget records it so the menu can be
-	// port-specific: entity commands only on the entity port (or the body).
 	void             SetContextPin(CFlowGraphPinItem* pPin) { m_pContextPin = pPin; }
 
 private:
-	// How to set the target entity on the affected nodes.
 	enum class EEntityAssign
 	{
-		Selected, // the entity currently selected in the level viewport
-		Graph,    // the graph's default (owner) entity
-		Unassign, // clear the target entity
+		Selected,
+		Graph,
+		Unassign,
 	};
 
-	// Clicked node plus any selected nodes that carry the entity flag (deduped).
 	std::vector<CFlowGraphNodeItem*> CollectEntityNodes(CFlowGraphNodeItem& clicked) const;
 
 	void                             AssignEntities(const std::vector<CFlowGraphNodeItem*>& nodes, EEntityAssign mode);
@@ -99,7 +86,7 @@ private:
 
 	CFlowGraphPinItem*               m_pContextPin = nullptr;
 	bool                             m_contextMenuFilterInstalled = false;
-	bool                             m_openAddNodeFromTab = false; // gate: only Tab opens the canvas search
+	bool                             m_openAddNodeFromTab = false;
 };
 
-} // namespace FlowGraphQt
+}

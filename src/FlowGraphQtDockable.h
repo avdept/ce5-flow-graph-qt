@@ -8,7 +8,7 @@
 
 #include "EditorFramework/Editor.h"
 
-#include "HyperGraph/IHyperGraph.h" // IHyperGraphListener, EHyperGraphEvent
+#include "HyperGraph/IHyperGraph.h"
 
 #include <QPoint>
 #include <QString>
@@ -28,8 +28,6 @@ class CFlowGraphViewModel;
 class CFlowGraphView;
 }
 
-// IHyperGraphListener: so undo/redo (which restores the graph and fires
-// EHG_GRAPH_UNDO_REDO) rebuilds the Qt projection.
 class CFlowGraphQtDockable : public CDockableEditor, public IHyperGraphListener
 {
 public:
@@ -38,12 +36,9 @@ public:
 
 	virtual const char* GetEditorName() const override { return "FlowGraph Qt"; }
 
-	// Drives drag-from-palette (source) and drop-on-canvas (target) to create nodes.
 	virtual bool eventFilter(QObject* pWatched, QEvent* pEvent) override;
 
-	// IHyperGraphListener
 	virtual void OnHyperGraphEvent(IHyperNode* pNode, EHyperGraphEvent event) override;
-	// ~IHyperGraphListener
 
 private:
 	void     RefreshGraphList();
@@ -53,7 +48,6 @@ private:
 	void     SaveCurrentGraph();
 	void     UpdateWindowTitle();
 
-	// Menu + shortcut wiring (File/Edit menus, Ctrl+Z/Y, Del, Ctrl+S).
 	void     RegisterActions();
 	void     InitMenu();
 	bool     OnUndo();
@@ -74,7 +68,6 @@ private:
 	std::unique_ptr<FlowGraphQt::CFlowGraphViewModel> m_pModel;
 	CHyperFlowGraph*                              m_pCurrentGraph;
 
-	// Palette drag state.
 	QPoint                                        m_dragStartPos;
 	QString                                       m_dragClassName;
 };

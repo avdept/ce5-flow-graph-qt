@@ -4,14 +4,14 @@
 #include "FlowGraphQtDockable.h"
 
 #include "FlowGraphQtViewModel.h"
-#include "FlowGraphQtNodeProperties.h" // CFlowGraphView
+#include "FlowGraphQtNodeProperties.h"
 
 #include "IEditorImpl.h"
-#include "IUndoObject.h" // CUndo
+#include "IUndoObject.h"
 #include "HyperGraph/FlowGraphManager.h"
 #include "HyperGraph/FlowGraph.h"
 #include "HyperGraph/FlowGraphNode.h"
-#include "Objects/EntityObject.h" // CEntityObject (entity-graph labels)
+#include "Objects/EntityObject.h"
 
 #include <EditorFramework/InspectorLegacy.h>
 
@@ -38,18 +38,12 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-// Opt-in pane under Tools: a DPI-correct Qt FlowGraph editor alongside the
-// legacy MFC one.
 REGISTER_VIEWPANE_FACTORY(CFlowGraphQtDockable, "FlowGraph Qt", "Tools", false)
 
 namespace
 {
-// Mime type carrying a flownode class name when dragging from the palette.
 const char* const kNodeClassMime = "application/x-cryengine-flowgraph-nodeclass";
 
-// Category palette items store their plain name here so we can re-prefix a
-// +/- expand indicator. Leaf (node) items instead use Qt::UserRole for the
-// class name, so a valid value in this role marks an item as a category.
 const int kCategoryNameRole = Qt::UserRole + 1;
 
 void SetCategoryGlyph(QTreeWidgetItem* pItem, bool expanded)
@@ -59,9 +53,7 @@ void SetCategoryGlyph(QTreeWidgetItem* pItem, bool expanded)
 		pItem->setText(0, (expanded ? QStringLiteral("- ") : QStringLiteral("+ ")) + name.toString());
 }
 
-// Stylesheet ::item padding only takes effect on hover (the theme owns the
-// normal state), so pad in a delegate instead: the style paints the full-width
-// highlight, we draw the text inset and bump the row height.
+// Tree item delegate that pads each row and draws the text inset.
 class CPaddedItemDelegate : public QStyledItemDelegate
 {
 public:
@@ -82,14 +74,12 @@ public:
 		QStyleOptionViewItem opt(option);
 		initStyleOption(&opt, index);
 
-		// Let the style draw the full-width background (selection/hover/etc.) with no text.
 		const QString text = opt.text;
 		opt.text.clear();
 		const QWidget* pWidget = opt.widget;
 		QStyle* pStyle = pWidget ? pWidget->style() : QApplication::style();
 		pStyle->drawControl(QStyle::CE_ItemViewItem, &opt, pPainter, pWidget);
 
-		// Draw the text inset, so the highlight stays full width but content is padded.
 		QRect textRect = opt.rect.adjusted(leftPad, 0, -rightPad, 0);
 		const QPalette::ColorGroup cg = (opt.state & QStyle::State_Enabled) ? QPalette::Normal : QPalette::Disabled;
 		const QPalette::ColorRole cr = (opt.state & QStyle::State_Selected) ? QPalette::HighlightedText : QPalette::Text;
@@ -101,7 +91,7 @@ public:
 		pPainter->restore();
 	}
 };
-} // anonymous namespace
+}
 
 CFlowGraphQtDockable::CFlowGraphQtDockable()
 	: CDockableEditor()
@@ -112,7 +102,6 @@ CFlowGraphQtDockable::CFlowGraphQtDockable()
 	, m_pInspector(nullptr)
 	, m_pCurrentGraph(nullptr)
 {
-	// Center: toolbar + the node graph view.
 	QWidget* pGraphSide = new QWidget();
 	QVBoxLayout* pLayout = new QVBoxLayout(pGraphSide);
 	pLayout->setContentsMargins(0, 0, 0, 0);
@@ -129,17 +118,14 @@ CFlowGraphQtDockable::CFlowGraphQtDockable()
 	m_pView = new FlowGraphQt::CFlowGraphView();
 	m_pView->setAcceptDrops(true);
 	m_pView->viewport()->setAcceptDrops(true);
-	m_pView->viewport()->installEventFilter(this); // drop target for palette drags
+	m_pView->viewport()->installEventFilter(this);
 	pLayout->addWidget(m_pView, 1);
 
 	QObject::connect(pRefresh, &QPushButton::clicked, [this]() { RefreshGraphList(); });
 	QObject::connect(pSave, &QPushButton::clicked, [this]() { SaveCurrentGraph(); });
 
-	// Right side: properties inspector. The graph view broadcasts the selected
-	// node's properties widget (CFlowGraphView::CreatePropertiesWidget) to it.
 	m_pInspector = new CInspectorLegacy(this);
 
-	// Left: nodes + flow-graph list | center: graph | right: properties inspector.
 	QSplitter* pSplitter = new QSplitter(Qt::Horizontal);
 	pSplitter->addWidget(CreateLeftSidebar());
 	pSplitter->addWidget(pGraphSide);
@@ -215,8 +201,6 @@ void CFlowGraphQtDockable::UpdateWindowTitle()
 
 QWidget* CFlowGraphQtDockable::CreateLeftSidebar()
 {
-	// Two stacked, resizable sections: the node palette on top, the flow-graph
-	// list below.
 	QSplitter* pSidebar = new QSplitter(Qt::Vertical);
 	pSidebar->addWidget(CreateNodePalette());
 	pSidebar->addWidget(CreateGraphList());
@@ -232,7 +216,6 @@ QWidget* CFlowGraphQtDockable::CreateNodePalette()
 	QVBoxLayout* pLayout = new QVBoxLayout(pContent);
 	pLayout->setContentsMargins(0, 0, 0, 0);
 
-	// QSearchBox is the framework's unified search field (don't use a raw QLineEdit).
 	m_pPaletteSearch = new QSearchBox();
 	m_pPaletteSearch->setPlaceholderText(tr("Filter nodes..."));
 	m_pPaletteSearch->EnableContinuousSearch(true);
@@ -242,16 +225,13 @@ QWidget* CFlowGraphQtDockable::CreateNodePalette()
 	m_pNodePalette = new QTreeWidget();
 	m_pNodePalette->setHeaderHidden(true);
 	m_pNodePalette->setSortingEnabled(false);
-	m_pNodePalette->setRootIsDecorated(false);       // we draw our own +/- indicator
-	m_pNodePalette->setExpandsOnDoubleClick(false);  // avoid double-toggle fighting our click handler
-	// Theme-proof per-row padding (full-width highlight, inset content).
+	m_pNodePalette->setRootIsDecorated(false);
+	m_pNodePalette->setExpandsOnDoubleClick(false);
 	m_pNodePalette->setItemDelegate(new CPaddedItemDelegate(m_pNodePalette));
 
-	// Drag source: we start the drag manually from the viewport (see eventFilter).
 	m_pNodePalette->viewport()->installEventFilter(this);
 	pLayout->addWidget(m_pNodePalette, 1);
 
-	// +/- expand indicator on category rows, and toggle a group by clicking it.
 	QObject::connect(m_pNodePalette, &QTreeWidget::itemExpanded, [](QTreeWidgetItem* pItem) { SetCategoryGlyph(pItem, true); });
 	QObject::connect(m_pNodePalette, &QTreeWidget::itemCollapsed, [](QTreeWidgetItem* pItem) { SetCategoryGlyph(pItem, false); });
 	QObject::connect(m_pNodePalette, &QTreeWidget::itemClicked, [](QTreeWidgetItem* pItem, int)
@@ -260,7 +240,6 @@ QWidget* CFlowGraphQtDockable::CreateNodePalette()
 			pItem->setExpanded(!pItem->isExpanded());
 	});
 
-	// Collapsible, titled section (the framework's grouping component).
 	QCollapsibleFrame* pFrame = new QCollapsibleFrame(tr("Nodes"));
 	pFrame->SetClosable(false);
 	pFrame->SetWidget(pContent);
@@ -272,14 +251,11 @@ void CFlowGraphQtDockable::RebuildNodePalette(const QString& filter)
 	if (!m_pNodePalette)
 		return;
 
-	// Split + removeAll(empty) instead of QString::SkipEmptyParts, which is
-	// removed in Qt6 (and Qt::SkipEmptyParts doesn't exist until Qt 5.14).
 	QStringList keywords = filter.toLower().split(QLatin1Char(' '));
 	keywords.removeAll(QString());
 
 	m_pNodePalette->clear();
 
-	// Map an accumulated "A:B:" path to its tree item so categories are shared.
 	std::map<QString, QTreeWidgetItem*> categories;
 
 	for (const FlowGraphQt::SFlowNodeClass& cls : FlowGraphQt::EnumerateFlowNodeClasses())
@@ -327,18 +303,16 @@ void CFlowGraphQtDockable::RebuildNodePalette(const QString& filter)
 		QTreeWidgetItem* pLeafItem = pParent
 		                             ? new QTreeWidgetItem(pParent, QStringList(cls.leaf))
 		                             : new QTreeWidgetItem(m_pNodePalette, QStringList(cls.leaf));
-		pLeafItem->setData(0, Qt::UserRole, cls.className); // class name for node creation
+		pLeafItem->setData(0, Qt::UserRole, cls.className);
 		pLeafItem->setToolTip(0, cls.uiName);
 	}
 
-	// When filtering, expand so matches are visible; otherwise keep it collapsed.
 	if (!keywords.isEmpty())
 		m_pNodePalette->expandAll();
 }
 
 bool CFlowGraphQtDockable::eventFilter(QObject* pWatched, QEvent* pEvent)
 {
-	// --- Drag source: the palette viewport ---
 	if (m_pNodePalette && pWatched == m_pNodePalette->viewport())
 	{
 		if (pEvent->type() == QEvent::MouseButtonPress)
@@ -346,7 +320,7 @@ bool CFlowGraphQtDockable::eventFilter(QObject* pWatched, QEvent* pEvent)
 			QMouseEvent* pMouse = static_cast<QMouseEvent*>(pEvent);
 			if (pMouse->button() == Qt::LeftButton)
 			{
-				m_dragStartPos = pMouse->pos(); // Qt6: pMouse->position().toPoint()
+				m_dragStartPos = pMouse->pos();
 				QTreeWidgetItem* pItem = m_pNodePalette->itemAt(pMouse->pos());
 				m_dragClassName = pItem ? pItem->data(0, Qt::UserRole).toString() : QString();
 			}
@@ -365,15 +339,13 @@ bool CFlowGraphQtDockable::eventFilter(QObject* pWatched, QEvent* pEvent)
 				pDrag->exec(Qt::CopyAction);
 
 				m_dragClassName.clear();
-				return true; // consumed, so it doesn't become a click/selection
+				return true;
 			}
 		}
 	}
 
-	// --- Drop target: the graph view viewport ---
 	if (m_pView && pWatched == m_pView->viewport())
 	{
-		// QDragEnterEvent derives from QDragMoveEvent.
 		if (pEvent->type() == QEvent::DragEnter || pEvent->type() == QEvent::DragMove)
 		{
 			QDragMoveEvent* pDrag = static_cast<QDragMoveEvent*>(pEvent);
@@ -389,9 +361,7 @@ bool CFlowGraphQtDockable::eventFilter(QObject* pWatched, QEvent* pEvent)
 			if (m_pModel && pDrop->mimeData()->hasFormat(kNodeClassMime))
 			{
 				const QString className = QString::fromUtf8(pDrop->mimeData()->data(kNodeClassMime));
-				const QPointF scenePos = m_pView->mapToScene(pDrop->pos()); // Qt6: pDrop->position().toPoint()
-				// Drag-create isn't bracketed by the NodeGraph view (unlike connect/delete),
-				// so open the undo step ourselves or RecordUndo() inside CreateNode is a no-op.
+				const QPointF scenePos = m_pView->mapToScene(pDrop->pos());
 				{
 					CUndo undo("Create FlowGraph Node");
 					m_pModel->CreateNode(QVariant(className), scenePos);
@@ -425,8 +395,6 @@ void CFlowGraphQtDockable::RefreshGraphList()
 
 	m_pGraphTree->clear();
 
-	// Fixed top-level folders, always present even when empty - mirrors the legacy
-	// CHyperGraphsTreeCtrl::FullReload (which creates every type folder up front).
 	QTreeWidgetItem* pEntities = new QTreeWidgetItem(m_pGraphTree, QStringList(tr("Entities")));
 	QTreeWidgetItem* pPrefabs  = new QTreeWidgetItem(m_pGraphTree, QStringList(tr("Prefabs")));
 	QTreeWidgetItem* pModules  = new QTreeWidgetItem(m_pGraphTree, QStringList(tr("FG Modules")));
@@ -472,9 +440,6 @@ void CFlowGraphQtDockable::RefreshGraphList()
 		default:
 			if (CEntityObject* pEntity = pGraph->GetEntity())
 			{
-				// An entity can own several flow graphs, distinguished by their group
-				// name (GetName() just returns the entity name). So make a folder per
-				// entity and label each leaf with the graph's own (group) name.
 				QTreeWidgetItem* pParent = pEntity->GetPrefab() ? pPrefabs : pEntities;
 
 				auto it = entityFolders.find(pEntity);
@@ -494,7 +459,7 @@ void CFlowGraphQtDockable::RefreshGraphList()
 
 				QString graphLabel = QtUtil::ToQString(pGraph->GetGroupName());
 				if (graphLabel.isEmpty())
-					graphLabel = tr("Default"); // the entity's single/unnamed graph
+					graphLabel = tr("Default");
 				addLeaf(pEntityFolder, graphLabel, i);
 			}
 			else
@@ -507,7 +472,6 @@ void CFlowGraphQtDockable::RefreshGraphList()
 
 	m_pGraphTree->expandAll();
 
-	// Open the first graph so the editor isn't blank on load.
 	if (pFirstLeaf)
 	{
 		m_pGraphTree->setCurrentItem(pFirstLeaf);
@@ -522,7 +486,7 @@ void CFlowGraphQtDockable::OpenGraphByIndex(size_t graphIndex)
 		return;
 
 	if (CHyperFlowGraph* pGraph = pManager->GetFlowGraph(graphIndex))
-		SetCurrentGraph(pGraph, /*fitInView*/ true);
+		SetCurrentGraph(pGraph, true);
 }
 
 QWidget* CFlowGraphQtDockable::CreateGraphList()
@@ -531,7 +495,6 @@ QWidget* CFlowGraphQtDockable::CreateGraphList()
 	m_pGraphTree->setHeaderHidden(true);
 	m_pGraphTree->setSortingEnabled(false);
 
-	// Leaf click opens the graph; folder rows carry no data (toggle on click).
 	QObject::connect(m_pGraphTree, &QTreeWidget::itemClicked, [this](QTreeWidgetItem* pItem, int)
 	{
 		const QVariant data = pItem->data(0, Qt::UserRole);
@@ -541,7 +504,6 @@ QWidget* CFlowGraphQtDockable::CreateGraphList()
 			pItem->setExpanded(!pItem->isExpanded());
 	});
 
-	// Collapsible, titled section (the framework's grouping component).
 	QCollapsibleFrame* pFrame = new QCollapsibleFrame(tr("Flow Graphs"));
 	pFrame->SetClosable(false);
 	pFrame->SetWidget(m_pGraphTree);
@@ -566,8 +528,6 @@ void CFlowGraphQtDockable::SetCurrentGraph(CHyperFlowGraph* pGraph, bool fitInVi
 
 void CFlowGraphQtDockable::RebuildModel(bool fitInView)
 {
-	// Detach + delete the old model before building a new one (its items point at
-	// CHyperNodes that an undo/redo may have just recreated).
 	m_pView->SetModel(nullptr);
 
 	if (m_pCurrentGraph)
@@ -576,10 +536,6 @@ void CFlowGraphQtDockable::RebuildModel(bool fitInView)
 		m_pView->SetModel(m_pModel.get());
 		if (fitInView)
 		{
-			// FitSceneInView fits the WHOLE graph (down to 10%), so spread-out
-			// graphs open uselessly zoomed out. Use it only to center on the
-			// content (it excludes the grid background, which we can't reach from
-			// here), then open at 100%.
 			m_pView->FitSceneInView();
 			const QPoint contentCenter = m_pView->GetPosition();
 			m_pView->SetZoom(100);
@@ -594,16 +550,11 @@ void CFlowGraphQtDockable::RebuildModel(bool fitInView)
 	UpdateWindowTitle();
 }
 
-void CFlowGraphQtDockable::OnHyperGraphEvent(IHyperNode* /*pNode*/, EHyperGraphEvent event)
+void CFlowGraphQtDockable::OnHyperGraphEvent(IHyperNode*, EHyperGraphEvent event)
 {
-	// Undo/redo restores the graph in place (recreating its nodes), so our item
-	// pointers are stale, so rebuild. Only react to UNDO_REDO (our own edits fire
-	// NODE_ADD / GRAPH_INVALIDATE and would re-enter) and to NODE_UPDATE_ENTITY,
-	// which changes the entity-port label + title (fired by AssignEntities).
 	if (event == EHG_GRAPH_UNDO_REDO || event == EHG_NODE_UPDATE_ENTITY)
-		RebuildModel(/*fitInView*/ false);
+		RebuildModel(false);
 
-	// Edits / undo / redo may have changed the modified state -> refresh the asterisk.
 	UpdateWindowTitle();
 }
 
@@ -615,12 +566,12 @@ void CFlowGraphQtDockable::SaveCurrentGraph()
 	const CString filename = m_pCurrentGraph->GetFilename();
 	bool saved = false;
 	if (!filename.IsEmpty())
-		saved = m_pCurrentGraph->Save(filename.GetString()); // file-backed (module / matfx / ...)
+		saved = m_pCurrentGraph->Save(filename.GetString());
 	else
-		saved = GetIEditorImpl()->SaveDocument();             // entity graph persists with the level
+		saved = GetIEditorImpl()->SaveDocument();
 
 	if (saved)
-		m_pCurrentGraph->SetModified(false); // clear the asterisk (Save() leaves the flag as-is)
+		m_pCurrentGraph->SetModified(false);
 
 	UpdateWindowTitle();
 }
